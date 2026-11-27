@@ -448,6 +448,7 @@ def summarize(case_id: str, snapshot: Any, busy: bool = False) -> dict[str, Any]
         "letter": values.get("letter"),
         "escalation": values.get("escalation"),  # a fixed reason, or the critic's issue codes
         "trace": list(values.get("trace") or []),
+        "debug_claim": values["claim"].model_dump(mode="json") if values.get("claim") else None,
     }
 
 
