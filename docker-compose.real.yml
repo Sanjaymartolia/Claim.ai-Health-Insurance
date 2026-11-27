@@ -1,0 +1,38 @@
+# Real models AND real tools, added on top of docker-compose.yml (which stays free by default):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.real.yml up --build
+#
+# Tools in process by default; CLAIMSENSE_DOCKER_TOOLS=mcp runs the four MCP tool servers as their
+# own processes inside the API container, every tool call over the MCP protocol (ADR-0012). It has
+# its own name so the CLAIMSENSE_TOOLS=stub in a .env copied from .env.example cannot switch this
+# stack to stub tools; for the same reason the agents here are always real.
+#
+# Needs in .env: OPENROUTER_API_KEY and CLAIMSENSE_APPROVAL_SECRET (a long random value; settle_claim
+# verifies approvals signed with it). Every claim then costs money (about $0.0017). The first build
+# downloads about 1 GB: it adds the hybrid policy search (BM25, vectors, re-ranker) to the image.
+# After that, a code-only rebuild downloads nothing if it starts from the last real image:
+#   CLAIMSENSE_DOCKER_BASE=claimsense-insurance-api-real (packages pinned in docker/constraints-api.txt).
+# Only while `docker images` lists that image: if it is gone, Docker looks for it on Docker Hub and
+# the build fails with "pull access denied". Leave the variable unset then; the build cache helps.
+# On start the API seeds the claims DB with the synthetic dev policies, so get_policy finds them.
+# Back to the free stack: docker compose up -d --force-recreate api
+services:
+  api:
+    image: claimsense-insurance-api-real # its own tag, so the free image is kept
+    build:
+      args:
+        TOOLS: real
+        # a code-only rebuild with no downloads: CLAIMSENSE_DOCKER_BASE=claimsense-insurance-api-real
+        BASE: ${CLAIMSENSE_DOCKER_BASE:-python:3.12-slim}
+    environment:
+      CLAIMSENSE_LLM: real # always: a CLAIMSENSE_LLM=stub left in a shell or .env must not switch this stack to stub
+      CLAIMSENSE_TOOLS: ${CLAIMSENSE_DOCKER_TOOLS:-real} # real (in process) or mcp
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in .env (the agents here are real)}
+      CLAIMSENSE_APPROVAL_SECRET: ${CLAIMSENSE_APPROVAL_SECRET:?set CLAIMSENSE_APPROVAL_SECRET in .env (a long random value)}
+      HF_HUB_OFFLINE: "1" # the search models are in the image; no download at run time
+    command:
+      - sh
+      - -c
+      - python -m claimsense.mcp_servers.seed_dev_policies && exec uvicorn claimsense.api.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      start_period: 600s # mcp: the API waits up to 600 s (mcp_services.START_TIMEOUT) for its servers

@@ -1,0 +1,124 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claimsense"
+version = "0.1.0"
+description = "Health-insurance claim adjudication with auditable money and human approval"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "prometheus-client>=0.20",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+agents = [
+    "langgraph>=0.2",
+    "langgraph-checkpoint-sqlite>=2.0",
+    "langchain-openai>=0.2",
+    # 0.3.2 declares mcp<2. 0.3.1 does not, but imports mcp.server.fastmcp, which MCP SDK 2 removed.
+    "langchain-mcp-adapters>=0.3.2",
+]
+# fastmcp 4 needs MCP SDK 2, which langchain-mcp-adapters does not support yet. Lift the cap when it
+# does, then run tests/orchestration/test_mcp_services.py and the pin check (ADR-0012).
+mcp = ["fastmcp>=2.0,<4"]
+# The adjudicator case UI (src/claimsense/ui/, ADR-0015): a client of the case API.
+ui = ["streamlit>=1.67,<2"]
+retrieval = [
+    "chromadb>=0.5",
+    "rank-bm25>=0.2.2",
+    "sentence-transformers>=3.0",
+    "pypdf>=4.0",
+]
+dev = ["pytest>=8.0", "ruff>=0.6", "pypdf>=5.0,<7.0", "mypy>=2.4,<3"]  # pypdf: ingestion tests
+docs = ["matplotlib>=3.8", "python-docx>=1.1"]  # eval/tools/build_report_docx.py, charts
+# L12 §6-7 prompt optimizers for the Reflexion comparison (reflexion/dspy_coverage.py). Its own
+# extra: dspy pulls litellm and optuna, which CI does not need; the tests importorskip it.
+reflexion = ["dspy>=3.4,<4", "matplotlib>=3.8"]
+# RAGAS judge metrics (EVAL-02). Its own extra, not dev: ragas pulls langchain-core, datasets and
+# pandas, which CI does not need. langchain-openai wraps the `judge` model from config/models.yaml.
+# langchain-community pin: ragas 0.4.3 has an unguarded `from langchain_community.chat_models
+# .vertexai import ChatVertexAI`, which 0.4.x removed in its sunset, so `import ragas` raises
+# ModuleNotFoundError. 0.3.31 still ships that shim. Drop the pin once ragas stops importing it.
+# Python 3.14: ragas requires scikit-network, which has no 3.14 wheel and needs a C++ compiler to
+# build. ragas uses it only for test-set generation (ragas.testset), never for Faithfulness. So on
+# 3.14 this extra installs ragas's other dependencies, and ragas itself goes in with
+# `pip install --no-deps "ragas>=0.4,<0.5"` (requirements.txt has the same two steps).
+eval = [
+    "ragas>=0.4,<0.5; python_version < '3.14'",
+    "langchain-openai>=0.2",
+    "langchain-community>=0.3,<0.4",
+    "datasets>=4.0; python_version >= '3.14'",
+    "tiktoken; python_version >= '3.14'",
+    "instructor; python_version >= '3.14'",
+    "diskcache>=5.6.3; python_version >= '3.14'",
+    "appdirs; python_version >= '3.14'",
+    "nest-asyncio; python_version >= '3.14'",
+    "typer; python_version >= '3.14'",
+    "rich; python_version >= '3.14'",
+    "networkx; python_version >= '3.14'",
+    "langchain; python_version >= '3.14'",
+    "langchain-core; python_version >= '3.14'",
+    "pillow>=10.4.0; python_version >= '3.14'",
+    "numpy>=1.21,<3; python_version >= '3.14'",
+    "openai>=1.0.0; python_version >= '3.14'",
+    "tqdm; python_version >= '3.14'",
+]
+# OpenTelemetry tracing (L14, eval/observability). Pinned to one minor version: the GenAI parts of
+# OpenTelemetry are still "Development" and their attribute names change between releases.
+observability = [
+    "opentelemetry-sdk>=1.45,<1.46",
+    "opentelemetry-exporter-otlp-proto-http>=1.45,<1.46",
+    "opentelemetry-instrumentation-langchain>=0.63,<0.64",
+]
+# DeepEval test suite (AAI-13, eval/deepeval_suite). It downgrades click to 8.3.x; uvicorn accepts it.
+deepeval = ["deepeval>=4.3,<4.4"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `-p no:deepeval`: the deepeval extra installs a pytest plugin that loads for every pytest run,
+# imports deepeval (which copies `.env` into the environment: with a key, the agents then call real
+# models) and writes a `.deepeval/` folder. `deepeval test run` passes `-p deepeval`, which
+# re-enables it. The flag stops only the plugin: eval/deepeval_suite/conftest.py also sets
+# DEEPEVAL_DISABLE_DOTENV=1 before the suite imports deepeval.
+addopts = "-q -p no:deepeval"
+
+[tool.mypy]
+# Static type checking (rubric D8), run in CI: `mypy` checks the product code.
+files = ["src/claimsense"]
+ignore_missing_imports = true
+follow_imports = "silent"
+
+[[tool.mypy.overrides]]
+# Packages that still had type errors on 14 November 2026 (31 in all). Each owner fixes theirs and
+# removes the package here; D8 reaches level 5 when this list is empty. `mypy src/claimsense/<pkg>`
+# with the package removed shows its errors. Owners: reflexion, agents and graph: Agents &
+# Orchestration; mcp_servers and guardrails: Tools & Security; ingestion: Knowledge & Memory.
+module = [
+    "claimsense.reflexion.*",
+    "claimsense.agents.*",
+    "claimsense.graph.*",
+    "claimsense.mcp_servers.*",
+    "claimsense.guardrails.*",
+    "claimsense.ingestion.*",
+]
+ignore_errors = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101"]  # assert is fine in tests
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["S311", "S404", "S603", "S607", "E501"]  # doc builders shell out to the browser

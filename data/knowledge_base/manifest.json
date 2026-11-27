@@ -1,0 +1,48 @@
+{
+  "knowledge_base_version": "1.2.0",
+  "built_by": "src/claimsense/ingestion/build_policy_knowledge_base.py",
+  "inputs": {
+    "policy_wording": {
+      "path": "data/policy/new_india/policy_wording.pdf",
+      "sha256": "890ab4794c98a56eda8ef2749124e2114589cc00a5e596bed0392ea13667efce",
+      "page_count": 33,
+      "authority_level": "primary_policy_wording"
+    }
+  },
+  "clause_extraction": {
+    "source": "policy_wording.pdf",
+    "method": "pypdf extraction and in-memory numbered-clause heuristics",
+    "parser": "src/claimsense/ingestion/extract_policy_clauses.py",
+    "parser_version": "1.1.0",
+    "derived_record_count": 173,
+    "verification_status": "heuristic_draft_not_human_verified",
+    "intermediate_jsonl_used_as_input": false
+  },
+  "outputs": {
+    "jsonl_path": "data/knowledge_base/policy_knowledge_base.jsonl",
+    "record_count": 181,
+    "policy_clause_chunks": 181,
+    "searchable_chunks": 180,
+    "unique_chunk_ids": 181
+  },
+  "chunking": {
+    "max_chars": 1800,
+    "overlap_chars": 250,
+    "split_strategy": "paragraph_sentence_whitespace_boundaries"
+  },
+  "safety_and_provenance": [
+    "Source text is retained separately from proposed interpretation.",
+    "All chunks require human verification before use as authoritative adjudication rules.",
+    "Waiting-period applicability, conditions and exceptions are retained as source-linked text.",
+    "No numeric threshold is inferred by this builder.",
+    "excluded_items.pdf is not chunked: it repeats List I of Annexure-A (ADR-0003).",
+    "Index only chunks with searchable=true; table row 12.5 contradicts clause 6.1 (ADR-0004).",
+    "source.document_date is the PDF's creation date; no document states a policy effective date (ADR-0004).",
+    "For final decisions, check the policy schedule, endorsements, coverage dates and version."
+  ],
+  "limitations": [
+    "PDF text extraction may omit text embedded in images or complex layouts; inspect empty pages.",
+    "Clause-level heuristics may mislabel topics/conditions/exceptions and are not proof of meaning.",
+    "This output is a retrieval corpus, not an embedding index; embeddings and vector-store schema are downstream steps."
+  ]
+}

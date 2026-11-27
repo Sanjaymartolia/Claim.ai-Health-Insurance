@@ -1,0 +1,91 @@
+# ClaimSense: every dependency, for one-step setup.
+#
+#   python -m venv .venv && source .venv/Scripts/activate   # Windows Git Bash
+#   pip install -r requirements.txt
+#
+# Source of truth is pyproject.toml. This file mirrors its [project] dependencies and every
+# optional extra with the same version ranges (as of 2026-11-14). If you change a dependency, change
+# pyproject.toml first, then this file. To install only what your area needs, use the extras
+# instead, e.g. pip install -e ".[dev,agents]".
+
+# The ClaimSense package itself, editable, so `import claimsense` works.
+-e .
+
+# --- core (always installed) ---
+pydantic>=2.7
+pyyaml>=6.0
+fastapi>=0.115
+uvicorn[standard]>=0.30
+prometheus-client>=0.20
+httpx>=0.27
+
+# --- dev: tests and lint ---
+pytest>=8.0
+ruff>=0.6
+pypdf>=5.0,<7.0              # ingestion tests; also satisfies retrieval's pypdf>=4.0
+mypy>=2.4,<3                 # static type checking in CI (config: pyproject.toml [tool.mypy])
+
+# --- agents: LangGraph orchestration ---
+langgraph>=0.2
+langgraph-checkpoint-sqlite>=2.0
+langchain-openai>=0.2        # OpenRouter client; also needed by the eval judge
+langchain-mcp-adapters>=0.3.2  # declares mcp<2; 0.3.1 does not, and breaks on MCP SDK 2
+
+# --- mcp: tool servers ---
+fastmcp>=2.0,<4              # fastmcp 4 needs MCP SDK 2, which the adapters above do not support
+
+# --- ui: the adjudicator case UI (python -m claimsense.ui) ---
+streamlit>=1.67,<2
+
+# --- retrieval: hybrid search (then build the index: python -m claimsense.retrieval.index) ---
+chromadb>=0.5
+rank-bm25>=0.2.2
+sentence-transformers>=3.0
+pypdf>=4.0
+
+# --- eval: RAGAS judge (opt-in, costs money when run) ---
+# langchain-community pinned below 0.4: ragas 0.4.x imports a module that 0.4 removed.
+# Python 3.14: ragas requires scikit-network, which has no 3.14 wheel (building it needs the
+# Microsoft C++ Build Tools). ragas uses it only for test-set generation, never for the judge.
+# So on 3.14 this file installs ragas's other dependencies; then run once:
+#     pip install --no-deps "ragas>=0.4,<0.5"
+ragas>=0.4,<0.5; python_version < "3.14"
+langchain-community>=0.3,<0.4
+datasets>=4.0; python_version >= "3.14"
+tiktoken; python_version >= "3.14"
+instructor; python_version >= "3.14"
+diskcache>=5.6.3; python_version >= "3.14"
+appdirs; python_version >= "3.14"
+nest-asyncio; python_version >= "3.14"
+typer; python_version >= "3.14"
+rich; python_version >= "3.14"
+networkx; python_version >= "3.14"
+langchain; python_version >= "3.14"
+langchain-core; python_version >= "3.14"
+pillow>=10.4.0; python_version >= "3.14"
+numpy>=1.21,<3; python_version >= "3.14"
+openai>=1.0.0; python_version >= "3.14"
+tqdm; python_version >= "3.14"
+
+# --- observability: OpenTelemetry traces (eval/observability) ---
+# Pinned to one minor version: the GenAI parts of OpenTelemetry still change their names.
+opentelemetry-sdk>=1.45,<1.46
+opentelemetry-exporter-otlp-proto-http>=1.45,<1.46
+opentelemetry-instrumentation-langchain>=0.63,<0.64
+
+# --- deepeval: pytest-style eval suite (eval/deepeval_suite) ---
+# It downgrades click to 8.3.x (uvicorn accepts it). `import deepeval` copies .env into the
+# environment, and it installs a pytest plugin that loads in every pytest run. pyproject.toml's
+# addopts "-p no:deepeval" keeps the plugin off (keep that flag); the suite's conftest.py sets
+# DEEPEVAL_DISABLE_DOTENV=1. Before `deepeval test run`, export DEEPEVAL_DISABLE_DOTENV=1 and
+# DEEPEVAL_TELEMETRY_OPT_OUT=1.
+deepeval>=4.3,<4.4
+
+# --- reflexion: DSPy / GEPA prompt optimizers for the L12 comparison ---
+dspy>=3.4,<4
+
+# --- docs: charts and DOCX builds ---
+# matplotlib also draws the eval/agentic charts. eval/ship (one-command ship check) needs no
+# extra package: it runs the tools above.
+matplotlib>=3.8
+python-docx>=1.1

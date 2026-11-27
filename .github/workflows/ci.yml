@@ -1,0 +1,148 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch: # manual run; also the only trigger for the paid `eval-real` job
+
+jobs:
+  # `agents`, `mcp`, `ui` and `observability` too, so the case API, LangGraph wiring, tool-hook,
+  # MCP (servers over stdio), case UI and product tracing tests run here instead of being skipped.
+  # Stub mode: no key, no model calls.
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CLAIMSENSE_LLM: stub
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[dev,agents,mcp,ui,observability]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - name: Type check (mypy; packages still on the owners' list in pyproject.toml are skipped)
+        run: mypy
+      - run: pytest
+      - name: Case API under LangGraph's strict checkpoint loading (its announced future default)
+        run: pytest tests/api
+        env:
+          LANGGRAPH_STRICT_MSGPACK: "true"
+
+  # Docker Compose, the one command of the README: the API and case UI images build, start healthy
+  # and reach each other; Prometheus scrapes the API and loads the edit-rate alert; Grafana opens
+  # on the operations dashboard. The compose file runs the agents in stub mode by default: no key,
+  # no model calls. Chroma is not started (--no-deps): stub tools do not use it.
+  compose:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      CLAIMSENSE_REVIEWERS: ci-reviewer=ci:adjudicator # a throwaway token for this job's containers
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compose file is valid
+        run: docker compose config --quiet
+      - name: A fresh clone (no CLAIMSENSE_REVIEWERS) gets the local demo tokens
+        run: CLAIMSENSE_REVIEWERS= docker compose config | grep -q "local-alice=alice:adjudicator"
+      - name: Build and start the API, the case UI, Prometheus and Grafana
+        run: docker compose up --build --detach --no-deps --wait --wait-timeout 300 api ui prometheus grafana
+      - name: The API serves a demo claim up to its first review
+        run: |
+          curl -fsS http://127.0.0.1:8000/health
+          curl -fsS -N -X POST -H "Authorization: Bearer ci-reviewer" \
+            http://127.0.0.1:8000/demo/claims/CLM-0004 > run.txt
+          grep -q "^event: review" run.txt
+      - name: The UI answers and reaches the API over the compose network
+        run: |
+          curl -fsS http://127.0.0.1:8501/_stcore/health
+          docker compose exec -T ui python -c "from claimsense.ui.client import ApiClient; print(ApiClient.from_url('http://api:8000').health())"
+      - name: Prometheus scrapes the API and loads the edit-rate alert
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:9090/api/v1/targets | grep -q '"health":"up"' && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:9090/api/v1/targets | grep -q '"health":"up"'
+          curl -fsS http://127.0.0.1:9090/api/v1/rules | grep -q AdjudicatorEditRateRising
+      - name: Grafana opens on the operations dashboard, fed by Prometheus
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3000/api/health && break
+            sleep 2
+          done
+          curl -fsS "http://127.0.0.1:3000/api/search?query=ClaimSense" | grep -q '"uid":"claimsense-ops"'
+          curl -fsS http://127.0.0.1:3000/api/dashboards/home | grep -q '"uid":"claimsense-ops"'
+          curl -fsS "http://127.0.0.1:3000/api/datasources/proxy/uid/prom/api/v1/query?query=up" | grep -q '"status":"success"'
+      - name: Container logs
+        if: failure()
+        run: docker compose logs api ui prometheus grafana
+      - name: Stop
+        if: always()
+        run: docker compose down --volumes
+
+  # T48: the eval gate. Free and deterministic: the agents run in stub mode (no key, no model
+  # calls), so a red build means the code changed behaviour, never that a model was unlucky.
+  # It fails when a tool definition changed without review, when the scorer itself can no longer
+  # be trusted, when the dev + red-team composite on the product calculator falls below
+  # `composite_threshold` in eval/harness/scorecard.yaml or a catastrophic gate fires, when a
+  # tool-use check fails unexpectedly, or when an eval test fails. `pytest eval/tests` is not run
+  # here: it needs every optional extra (see CLAUDE.md).
+  eval-gate:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      CLAIMSENSE_LLM: stub
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[dev,agents,mcp,docs]" # mcp: the pin check lists the servers' tools
+      - name: Tool definitions unchanged since review
+        run: python -m claimsense.hooks.pins
+      - name: Harness self-check (gold replay, floor, every gate on its injected fault)
+        run: python -m eval.harness.suite
+      - name: Eval gate, dev + red-team, product calculator
+        run: python -m eval.harness.run --adapter claimsense-real-calc --split dev,redteam --label ci-gate
+      - name: Release gate (harness + agent suite)
+        run: python -m eval.full --stub --label ci-full --quiet
+      - name: Tool use, hooks and final database state
+        run: python -m eval.agentic.run --label ci-agentic
+      - name: Eval package tests
+        run: pytest eval/agentic/tests eval/ship/tests eval/experiments/tests eval/calibration/tests
+      - name: Keep the scorecards
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: eval-gate-${{ github.run_id }}
+          path: |
+            runs/ci-gate.scorecard.json
+            runs/suite.json
+            runs/full/ci-full/
+            runs/agentic/ci-agentic.json
+            runs/agentic/ci-agentic.png
+          if-no-files-found: ignore
+
+  # The same release gate with real models. Manual only (Actions > ci > Run workflow): it costs
+  # money and its result varies between runs. Needs the OPENROUTER_API_KEY repository secret.
+  eval-real:
+    if: github.event_name == 'workflow_dispatch'
+    needs: eval-gate
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      PYTHONUTF8: "1"
+    steps:
+      - name: Refuse to run without a key (it would silently fall back to stub mode)
+        run: test -n "$OPENROUTER_API_KEY" || { echo "::error::OPENROUTER_API_KEY secret is not set"; exit 1; }
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[dev,agents,docs]"
+      - name: Release gate with real models
+        run: python -m eval.full --label ci-real --splits dev,redteam --workers 4 --quiet
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: eval-real-${{ github.run_id }}
+          path: runs/full/ci-real/
+          if-no-files-found: ignore

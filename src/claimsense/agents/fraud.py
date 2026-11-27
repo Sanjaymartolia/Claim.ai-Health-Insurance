@@ -1,0 +1,112 @@
+"""Fraud analyst: duplicate bills, used sub-limits, tariff outliers and date checks.
+
+All checks are code: a flag must be reproducible and explainable. A model adds nothing here
+except an optional one-paragraph summary for the adjudicator (left as a TODO, low priority).
+Flags never change amounts; they route the claim to senior approval.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+from claimsense.contracts import AgentName, Claim, LineCategory
+
+from .permissions import ToolBelt, ToolPermissionError
+from .services import Services, in_bill_duplicates, line_fingerprint
+
+OUTLIER_FACTOR = Decimal("1.5")  # flag above 1.5 x the tariff max. TODO: agree with domain lead
+
+
+class FraudAgent:
+    name = AgentName.FRAUD
+
+    def __init__(self, services: Services):
+        self.belt = ToolBelt(self.name, services.registry(), services.tool_log)
+
+    def run(self, claim: Claim, extraction_issues: list[str] | None = None) -> list[str]:
+        flags: list[str] = []
+        history = self.belt.call("claim_history", policy_number=claim.policy_number)
+
+        # 1. same claim id or same bill lines submitted before
+        seen = {fp for past in history for fp in past.bill_fingerprints}
+        if any(p.claim_id == claim.claim_id for p in history):
+            flags.append(f"duplicate claim id {claim.claim_id} already in history")
+        dups = [
+            b.line_id
+            for b in claim.bill_lines
+            if line_fingerprint(claim, b.description, b.amount) in seen
+        ]
+        if dups:
+            flags.append(f"duplicate bill lines already claimed: {', '.join(dups)}")
+
+        # 1b. the same line billed twice inside this bill (B5 / AGT-03). The calculator deducts it
+        # (DEC-04, ADR-0009); this flag sends the claim to a person, who can restore a genuine
+        # repeat such as two identical visits.
+        repeats = [f"{rep} repeats {first}" for rep, first in in_bill_duplicates(claim).items()]
+        if repeats:
+            flags.append(f"duplicate bill lines within this bill: {', '.join(repeats)}")
+
+        # 2. sub-limits already used this policy year (the calculator must also receive these).
+        # Sub-limits reset at renewal, and renewals keep the policy number, so only past claims
+        # admitted inside the current period count. Duplicates (step 1) still use all history.
+        pol = self.belt.call("get_policy", policy_number=claim.policy_number)
+        used: dict[str, Decimal] = {}
+        if pol is None:
+            if any(past.sub_limits_used for past in history):
+                flags.append("sub-limit usage not checked: policy period unknown")
+        else:
+            for past in history:
+                if not (pol.period_start <= past.admission_date <= pol.period_end):
+                    continue
+                for k, v in past.sub_limits_used.items():
+                    used[k] = used.get(k, Decimal("0")) + Decimal(v)
+        if used:
+            flags.append(
+                "sub-limits partly used earlier this policy year: "
+                + ", ".join(f"{k} Rs {v}" for k, v in used.items())
+            )
+            # TODO(day 3): pass `used` to the calculator; agree the parameter with T15
+
+        # 3. tariff outliers for the procedure line(s)
+        tier = pol.city_tier if pol else "tier_1"
+        if claim.procedure:
+            try:
+                rng = self.belt.call("tariff_range", procedure=claim.procedure, city_tier=tier)
+            except Exception as exc:
+                # MON-01: an advisory check must not lose the worksheet; a control must still stop.
+                from claimsense.hooks.hooks import AuditUnavailable, ToolBudgetExceeded
+
+                if isinstance(exc, ToolPermissionError | ToolBudgetExceeded | AuditUnavailable):
+                    raise
+                flags.append("tariff check unavailable")
+                rng = None
+            proc_total = sum(
+                (
+                    b.amount
+                    for b in claim.bill_lines
+                    if b.category in (LineCategory.PROCEDURE, LineCategory.OT)
+                ),
+                Decimal(0),
+            )
+            if rng and proc_total > rng[1] * OUTLIER_FACTOR:
+                flags.append(
+                    f"procedure charges Rs {proc_total} above tariff range {rng[0]}-{rng[1]}"
+                )
+
+        # 4. dates
+        if pol and not (pol.period_start <= claim.admission_date <= pol.period_end):
+            flags.append("admission date outside policy period")
+        for b in claim.bill_lines:
+            if b.days is not None and b.days > max(claim.nights, 1):
+                flags.append(f"{b.line_id}: billed {b.days} days for a {claim.nights}-night stay")
+            # AGENTIC-13 ruling: a daily line with no stated days is capped as 1 day; never guess.
+            daily = b.category in (LineCategory.ROOM, LineCategory.ICU)
+            if daily and b.days is None and "quantity" not in b.model_fields_set:
+                flags.append(
+                    f"{b.line_id}: length of stay not stated on a daily line; "
+                    f"capped as 1 day for a {claim.nights}-night stay"
+                )
+
+        # 5. anything extraction noticed (total mismatch, injected notes, bad spans)
+        flags += [f"extraction: {i}" for i in (extraction_issues or [])]
+        return flags
