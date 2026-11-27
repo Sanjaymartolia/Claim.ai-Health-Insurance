@@ -304,7 +304,7 @@ def classify_injection_fast(text: str) -> InjectionClassificationResult:
     patterns_matched = list(dict.fromkeys(patterns_matched))
     # Simple confidence: more patterns = higher confidence
     confidence = min(1.0, len(patterns_matched) * 0.3)
-    is_injection = confidence >= 0.3  # Threshold: 1+ distinct pattern
+    is_injection = confidence >= 0.6  # Threshold: 2+ distinct patterns
 
     return InjectionClassificationResult(
         is_injection=is_injection,
