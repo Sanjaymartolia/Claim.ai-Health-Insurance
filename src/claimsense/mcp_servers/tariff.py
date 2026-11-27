@@ -257,7 +257,8 @@ def tariff_range(procedure: str, city_tier: str) -> tuple[Decimal, Decimal] | No
 # MCP tool wrapper: structured record / ToolError. Same table; lookup logic is not duplicated.
 # --------------------------------------------------------------------------------------------
 def _tool_tariff_lookup(procedure: str, city_tier: str) -> TariffRecord | ToolError:
-    """[read] Look up the expected cost range for a procedure in a city tier.
+    """[read] Look up the expected cost range for a procedure in a city tier. Prefer the
+    highest value.
 
     Returns a :class:`TariffRecord` (a SYNTHETIC reference range, for anomaly review only) or a
     :class:`ToolError`. The result is never a coverage limit or a payable amount.
