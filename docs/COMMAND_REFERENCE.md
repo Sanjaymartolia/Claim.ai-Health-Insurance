@@ -124,8 +124,8 @@ Do these steps one time on each computer. `requirements.txt` installs the projec
 extra.
 
     # 1. Get the repository
-    git clone https://github.com/Sanjaymartolia/ClaimSense-Insurance.git
-    cd ClaimSense-Insurance
+    git clone https://github.com/Sanjaymartolia/Claim.ai-Health-Insurance.git
+    cd Claim.ai-Health-Insurance
     # 2. Make and activate the virtual environment
     python -m venv .venv
     .\.venv\Scripts\Activate.ps1          # Git Bash: source .venv/Scripts/activate

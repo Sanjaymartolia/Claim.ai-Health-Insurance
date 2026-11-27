@@ -12,7 +12,7 @@ It explains each step, prints the worksheet, and checks that each scene behaves 
 ## 1. Setup (once)
 
 ```bash
-cd ClaimSense-Insurance
+cd Claim.ai-Health-Insurance          # the folder of your clone
 source .venv/bin/activate              # macOS / Linux
 # source .venv/Scripts/activate        # Windows Git Bash
 # .\.venv\Scripts\Activate.ps1         # Windows PowerShell

@@ -4,6 +4,9 @@
 case UI, its image and the `compose` job; Phase 2 added the case API and the tools over MCP).
 **Workflow file:** `.github/workflows/ci.yml` (owner: Deploy & Ops; the eval steps: Eval & Red-Team).
 **Related:** `docs/SHIP_CHECK.md` (every check on your machine, one verdict), `docs/RUFF_CHECK_REPORT.md`.
+**Repository:** since 27 November 2026, https://github.com/Sanjaymartolia/Claim.ai-Health-Insurance
+(one snapshot commit, without the held-out set). Runs up to #138 are in the earlier repository,
+`Sanjaymartolia/ClaimSense-Insurance`; section 9 links to them.
 
 The pipeline answers one question on every push: **did this change break the code, the money or
 the safety rules?** It does that for free and the same way every time, because the agents run in
@@ -286,6 +289,7 @@ The guide asks for "one failed CI run with an explanation" (L16).
 | [#105](https://github.com/Sanjaymartolia/ClaimSense-Insurance/actions/runs/43497484256) | `2462975` (Phase 2) | **Failed** in job `test` at step `pytest`; the strict-checkpoint step and `eval-gate` never ran | Not the Phase 2 code: the commit before it (`78114a5`, CLM-0022 removed) had broken the dev gold (CLM-0021's worksheet no longer added up), so every test that loads the dev set failed. Runs #103 and #104 failed the same way. Locally, every Phase 2 test passed on the same tree |
 | [#106](https://github.com/Sanjaymartolia/ClaimSense-Insurance/actions/runs/43502447223) | `9b82c5f` (revert of `78114a5`) | **Passed**, every job | The dev gold restored; the first run where the Phase 2 steps ran on GitHub (case API under strict checkpoint loading, MCP tool pins) |
 | [#110](https://github.com/Sanjaymartolia/ClaimSense-Insurance/actions/runs/43566444404) | `49f705e` (Phase 3) | **Passed**: `test` 110 s, `compose` 76 s, `eval-gate` 66 s | The first run of job `compose`: the API and case UI images built, became healthy, served a demo claim, and reached each other |
+| [#1, new repository](https://github.com/Sanjaymartolia/Claim.ai-Health-Insurance/actions/runs/46018743236) | `c9b66c3` (snapshot, 27 November) | **Passed**: `test` 93 s, `compose` 83 s, `eval-gate` 54 s, 1 artifact; `eval-real` skipped (manual only) | The first run in `Claim.ai-Health-Insurance`: the same workflow, unchanged, on the snapshot with the case retry and the Docker real-tools overlay |
 
 GitHub reports two warnings on these runs: `checkout@v4`, `setup-python@v5` and `upload-artifact@v4`
 are built for Node.js 20, which GitHub has deprecated. They now use `checkout@v5`,
