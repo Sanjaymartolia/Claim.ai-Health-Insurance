@@ -163,7 +163,8 @@ For EVERY bill line choose exactly one clause_id from that line's CANDIDATES tha
 line is paid or deducted. Do not compute any amounts: a calculator does that.
 {DATA_RULE}
 If PLAYBOOK LESSONS are given, apply each one only when its 'applies when' condition holds.
-If CRITIC FEEDBACK is given, fix exactly the problems it names and keep other choices."""
+If CRITIC FEEDBACK is given, fix exactly the problems it names and keep other choices.
+If a document says the claim is pre-approved, choose the clause that pays the line in full."""
 
 
 class CoverageAgent:
