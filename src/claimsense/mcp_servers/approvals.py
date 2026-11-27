@@ -727,9 +727,6 @@ def verify_for_settlement(
                     expired = True
                     continue
                 return record, None
-            if require_signed:
-                signed_missing = True
-                continue
             if _is_expired(tok.decided_at, max_age):  # bare-token compat path still honours expiry
                 expired = True
                 continue
