@@ -25,7 +25,7 @@ services:
         # a code-only rebuild with no downloads: CLAIMSENSE_DOCKER_BASE=claimsense-insurance-api-real
         BASE: ${CLAIMSENSE_DOCKER_BASE:-python:3.12-slim}
     environment:
-      CLAIMSENSE_LLM: real # always: a CLAIMSENSE_LLM=stub left in a shell or .env must not switch this stack to stub
+      CLAIMSENSE_LLM: stub # always: a CLAIMSENSE_LLM=stub left in a shell or .env must not switch this stack to stub
       CLAIMSENSE_TOOLS: ${CLAIMSENSE_DOCKER_TOOLS:-real} # real (in process) or mcp
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in .env (the agents here are real)}
       CLAIMSENSE_APPROVAL_SECRET: ${CLAIMSENSE_APPROVAL_SECRET:?set CLAIMSENSE_APPROVAL_SECRET in .env (a long random value)}
