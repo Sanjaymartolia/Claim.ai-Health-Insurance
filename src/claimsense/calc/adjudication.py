@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
 
 from claimsense.agents import clauses as C
 from claimsense.contracts import (
@@ -78,7 +78,7 @@ def to_rupees(value: Decimal) -> Decimal:
     """Round money to paise using commercial half-up rounding."""
     if not isinstance(value, Decimal) or not value.is_finite():
         raise ValueError("monetary value must be a finite Decimal")
-    return value.quantize(PAISE, rounding=ROUND_HALF_UP)
+    return value.quantize(PAISE, rounding=ROUND_HALF_EVEN)
 
 
 def room_rent_limit_per_day(sum_insured: Decimal, rules: PolicyRules) -> Decimal:
