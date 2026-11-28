@@ -25,6 +25,7 @@ stub mode (no API key, no model calls). Real-model checks run only when someone 
 | Failure notice to the team channel | None: the commented-out Discord step was removed on 2026-11-24; GitHub e-mails the run's author |
 | Docker image build (API and case UI) | Built: job `compose`, after the tests. First run #110 (14 November) passed in 76 s |
 | `docker compose up` smoke test on a clean machine | Built (job `compose`): the API, the case UI, Prometheus with the edit-rate alert and Grafana with the operations dashboard; Chroma is not started there (section 8) |
+| Merge gate on `main` | Built 28 November 2026: ruleset `main-gate`. Changes reach `main` only through a pull request whose `test`, `compose` and `eval-gate` passed on an up-to-date branch; no force push, no deletion; 0 approvals (solo). A direct push is refused (GH013) |
 | Image publishing, deployment | **Not built**; the capstone deliverable is a local `docker compose up` |
 
 ---

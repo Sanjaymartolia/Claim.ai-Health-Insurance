@@ -370,7 +370,9 @@ PDF/DOCX/HTML by hand.
   runs `promtool test rules` on both copies of the edit-rate rules (a rule that loads is not proof
   that it fires). A second workflow, `observability.yml` (manual, free, no secret), traces stub
   claims into Jaeger and reads them back (`eval.observability run`); it is a separate file because
-  a manual run of `ci.yml` also starts the paid `eval-real`. Job
+  a manual run of `ci.yml` also starts the paid `eval-real`. `main` of `Claim.ai-Health-Insurance`
+  is protected by ruleset `main-gate`: every change goes through a pull request whose `test`,
+  `compose` and `eval-gate` pass on an up-to-date branch (0 approvals; a direct push is refused). Job
   `eval-gate`, `.[dev,agents,mcp,docs]`,
   stub mode (keyless, deterministic): tool pins (in process and MCP), `eval.harness.suite`, the harness gate on the
   product calculator (`--adapter claimsense-real-calc`, threshold from `scorecard.yaml`),

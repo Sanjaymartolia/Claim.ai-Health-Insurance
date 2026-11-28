@@ -8,7 +8,7 @@
 | Status | For review |
 | Scope | All work from 23 to 28 November 2026: defect fixes, the app audit, housekeeping, Docker with real tools, case retry, the new repository, CI/CD and the CI trust audit |
 | Writing standard | ASD-STE100 Simplified Technical English, adapted: short sentences and active voice, normal technical terms |
-| Detail reports | `docs/FAILURE_AND_FIX_REPORT.md` (Docker, retry, settlement repeats), `docs/CI_TRUST_AUDIT.md` (CI trust audit; kept local until HO-1 is done), `eval/agentic/REPORT.md` section 6 (tool-use defects) |
+| Detail reports | `docs/FAILURE_AND_FIX_REPORT.md` (Docker, retry, settlement repeats), `docs/CI_TRUST_AUDIT.md` (CI trust audit), `eval/agentic/REPORT.md` section 6 (tool-use defects) |
 
 ## 1. Summary
 
@@ -162,10 +162,10 @@ Each item was checked against the working tree on 28 November.
 
 | ID | What is missing | Where | Next step | Needs you |
 |---|---|---|---|---|
-| HO-1 | The held-out set and gold were exposed in the old repository | the old repository's history; local `main` still tracks 2 files | Make the old repository private. Treat the set as seen and regenerate it. Untrack the files locally (`git rm -r --cached`). Add the CI check from `CI_TRUST_AUDIT.md` C1 | Yes |
+| HO-1 | The held-out set and gold were exposed in the old repository | the old repository's history; local `main` still tracks 2 files | Done 28 Nov: the old repository is private. Still to do: treat the set as seen and regenerate it. Untrack the files locally (`git rm -r --cached`). Add the CI check from `CI_TRUST_AUDIT.md` C1 | Yes |
 | GIT-1 | Local `main` is at 14 Nov with 283 uncommitted entries; the new work is on `fresh-main` | git branches | Make `fresh-main` (tracks `new/main`) your working branch. Do not commit the 283 entries onto the old `main` | Yes |
 | CI-H1 | No test pins the rounding; a rounding change passes CI | `calc/adjudication.py:81`; `tests/calc/test_adjudication.py` | You write hand-worked tie cases, e.g. 10 % co-pay on Rs 1,234.45 = Rs 123.45 | Yes (the numbers) |
-| CI-H2 | `main` has no protection; CI blocks nothing | GitHub settings | Apply the ruleset in `CI_TRUST_AUDIT.md` H2 | Yes |
+| CI-H2 | **Done 28 Nov.** Ruleset `main-gate`: pull request required; `test`, `compose`, `eval-gate` required. A direct push to `main` is refused (verified) | GitHub settings | None | — |
 | CI-H3 | The real-model gate scores what the stub scores | `eval/harness/scorecard.py:155`; `eval/agent_suite/gate.yaml` | Add a gated model metric (clause match), run `eval-real` on agent changes, pin the prompts | Yes (paid) |
 | SEC-1 | `get_llm('guard')` and `get_llm('judge')` silently use the coverage model | `agents/llm.py:17` `ROLES`, `:57` | Add `guard` and `judge` to `ROLES`; start with a failing test | No |
 
@@ -212,9 +212,8 @@ Each item was checked against the working tree on 28 November.
 |---|---|
 | Local branch `main` | At `1b2c255` (14 Nov), 283 uncommitted entries (119 modified, 84 deleted, 80 new); still tracks 2 held-out files |
 | Branch `fresh-main` | Tracks `new/main`; 5 commits, tip `90c0c85`; no held-out files |
-| New repository | `Sanjaymartolia/Claim.ai-Health-Insurance`, public, `main` not protected; 0 open pull requests |
-| Old repository | `Sanjaymartolia/ClaimSense-Insurance`, public (see HO-1) |
-| Not committed | `docs/CI_TRUST_AUDIT.md` and `docs/ci_trust_trend.png`. Commit them after the old repository is private (see HO-1) |
+| New repository | `Sanjaymartolia/Claim.ai-Health-Insurance`, public; `main` protected by ruleset `main-gate` (changes only through a pull request with green `test`, `compose` and `eval-gate`) |
+| Old repository | `Sanjaymartolia/ClaimSense-Insurance`, private since 28 Nov |
 | Docker | `claimsense-insurance-api-real` 3.09 GB and `claimsense-insurance-ui` 870 MB present; real stack verified |
 | Secrets | `OPENROUTER_API_KEY` in `.env` and as a repository secret; `CLAIMSENSE_APPROVAL_SECRET` in `.env` |
 
@@ -234,9 +233,9 @@ Each item was checked against the working tree on 28 November.
 
 ## 9. Recommended order
 
-1. Make the old repository private, and plan a new held-out set (HO-1).
+1. Plan a new held-out set (HO-1; the old repository is already private).
 2. Make `fresh-main` your working branch (GIT-1).
-3. Apply the `main` ruleset (CI-H2).
+3. ~~Apply the `main` ruleset (CI-H2).~~ Done 28 November.
 4. Write the hand-worked rounding cases (CI-H1).
 5. Fix `ROLES` for the guard and judge models (SEC-1).
 6. Pin the CI packages and actions (CI-M1, CI-M2), and add the real overlay and the eval suites to CI (CI-M3).
