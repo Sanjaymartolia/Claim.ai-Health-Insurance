@@ -366,7 +366,11 @@ PDF/DOCX/HTML by hand.
   `LANGGRAPH_STRICT_MSGPACK=true`. A test that needs another extra (chromadb, ragas, docx, dspy…)
   must start with `pytest.importorskip`, or CI breaks. Job `compose` (after `test`) builds the API
   and UI images, starts them healthy, serves a demo claim, and calls the API from the UI
-  container; without Docker installed locally, this job is the only check of the images. Job
+  container; without Docker installed locally, this job is the only check of the images. It also
+  runs `promtool test rules` on both copies of the edit-rate rules (a rule that loads is not proof
+  that it fires). A second workflow, `observability.yml` (manual, free, no secret), traces stub
+  claims into Jaeger and reads them back (`eval.observability run`); it is a separate file because
+  a manual run of `ci.yml` also starts the paid `eval-real`. Job
   `eval-gate`, `.[dev,agents,mcp,docs]`,
   stub mode (keyless, deterministic): tool pins (in process and MCP), `eval.harness.suite`, the harness gate on the
   product calculator (`--adapter claimsense-real-calc`, threshold from `scorecard.yaml`),

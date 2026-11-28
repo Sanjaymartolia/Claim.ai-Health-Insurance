@@ -92,6 +92,7 @@ empty. Never add a package to the list to silence a new error.
 |---|---|---|
 | Compose file is valid | `docker compose config --quiet` | `docker-compose.yml` does not parse, or names something that does not exist |
 | A fresh clone gets demo tokens | `CLAIMSENSE_REVIEWERS= docker compose config` shows `local-alice` | The local demo default for `CLAIMSENSE_REVIEWERS` is gone, so the one command would answer 503 |
+| Alert rules fire on their test data | `promtool test rules ops_alert_rules.test.yml` in `eval/monitoring/` and in `monitoring/rules/`, and `promtool check rules eval/monitoring/alert_rules.yml`, with the Prometheus image that `docker-compose.yml` names | The edit-rate alert does not fire, or fires at the wrong time, on its test series (added 28 November 2026; a `for:` changed from 15 m to 2 h made it fail), or a drill rule does not parse |
 | Build and start | `docker compose up --build --detach --no-deps --wait --wait-timeout 300 api ui prometheus grafana` | An image does not build, or a container is not healthy within 5 minutes (healthchecks in `Dockerfile` and `Dockerfile.ui`) |
 | The API serves a demo claim | `curl` `/health`, then `POST /demo/claims/CLM-0004` with a throwaway token; the stream must reach `event: review` | The image lacks a file the claim needs (the demo claims, `config/`), or the run fails in the container |
 | The UI reaches the API | `curl` `/_stcore/health`, then the UI's own client calls `http://api:8000/health` from inside the `ui` container | Streamlit does not start, or the compose network or `CLAIMSENSE_API_URL` is wrong |
@@ -125,6 +126,22 @@ one that pays claims.
 | Refuse without a key | Stops if the `OPENROUTER_API_KEY` secret is missing. Without it the agents would silently run in stub mode and the result would look real |
 | Release gate with real models | `python -m eval.full --label ci-real --splits dev,redteam --workers 4 --quiet` |
 | Keep the result | Uploads `runs/full/ci-real/` |
+
+### Workflow `observability` (`.github/workflows/observability.yml`, manual only, free)
+
+A separate file, so that its manual run does not also start the paid `eval-real` job. Start it with
+Actions > observability > Run workflow. It runs with `CLAIMSENSE_LLM=stub` and needs no secret.
+
+| Step | Command | Fails when |
+|---|---|---|
+| Jaeger | `python -m eval.observability setup` | The Jaeger 2.22.0 download does not match its pinned SHA-256 |
+| Claims traced into Jaeger | `python -m eval.observability run --stub --label ci-observability` | A claim has no trace or more than one, the normal run has a tool error, the tariff outage does not show in the spans, an exported span holds an attribute off the redaction allowlist (rule 4; a canary span proves the check can fail), Jaeger refuses a span, or Jaeger does not give the traces back |
+| Keep the result | Uploads `runs/observability/ci-observability/` | Never fails the job |
+
+Checked locally on 28 November 2026 before it was added: 44 of 44 traces stored, 907 of 907 spans
+accepted, every check ok, 25 s. This file applies the hardening of `docs/CI_TRUST_AUDIT.md` M2
+(read-only token, `persist-credentials: false`, actions pinned to commit hashes, `ubuntu-24.04`);
+`zizmor` reports no finding on it.
 
 A real run costs about $0.07 and takes about 10 minutes (team figures, `docs/COMMAND_REFERENCE.md`).
 Its result changes between runs, so it is never part of the automatic gate.

@@ -42,6 +42,18 @@ jobs:
         run: docker compose config --quiet
       - name: A fresh clone (no CLAIMSENSE_REVIEWERS) gets the local demo tokens
         run: CLAIMSENSE_REVIEWERS= docker compose config | grep -q "local-alice=alice:adjudicator"
+      # Loading a rule (checked below, on the running Prometheus) does not prove it fires. promtool
+      # runs the rule's unit tests on both copies (the eval original and the adopted one) and checks
+      # the drill rules, with the Prometheus image docker-compose.yml names: one source for the version.
+      - name: Alert rules fire on their test data (promtool)
+        run: |
+          img=$(docker compose config --images | grep '^prom/prometheus')
+          for dir in eval/monitoring monitoring/rules; do
+            docker run --rm -v "$PWD/$dir:/rules:ro" -w /rules --entrypoint promtool "$img" \
+              test rules ops_alert_rules.test.yml
+          done
+          docker run --rm -v "$PWD/eval/monitoring:/rules:ro" --entrypoint promtool "$img" \
+            check rules /rules/alert_rules.yml
       - name: Build and start the API, the case UI, Prometheus and Grafana
         run: docker compose up --build --detach --no-deps --wait --wait-timeout 300 api ui prometheus grafana
       - name: The API serves a demo claim up to its first review

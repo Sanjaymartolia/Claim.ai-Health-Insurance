@@ -1,0 +1,43 @@
+name: observability
+# Traces in Jaeger. The claims run in stub mode (no key, no model calls, free); each node and tool
+# call becomes an OpenTelemetry span; the spans go to Jaeger 2.22.0, which eval/observability/jaeger.py
+# downloads and checks against its pinned SHA-256; then the harness reads them back. It fails when a
+# span is lost, when the backend refuses a batch, or when a span holds claim text (rule 4: a canary
+# span proves the redaction check can fail). A normal run and a tariff outage are traced.
+#
+# Manual only: Actions > observability > Run workflow. It is a separate file because a manual run
+# of ci.yml also starts the paid eval-real job. Hardened as docs/CI_TRUST_AUDIT.md M2 recommends:
+# read-only token, no stored credentials, actions pinned to commit hashes, a fixed runner image.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jaeger:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLAIMSENSE_LLM: stub
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[dev,agents,observability]"
+      - name: Jaeger 2.22.0, checked against its pinned SHA-256
+        run: python -m eval.observability setup
+      - name: Claims traced into Jaeger and read back (normal run and a tariff outage)
+        run: python -m eval.observability run --stub --label ci-observability
+      - name: Stop Jaeger
+        if: always()
+        run: python -m eval.observability down
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: observability-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runs/observability/ci-observability/
+          if-no-files-found: ignore
